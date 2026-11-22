@@ -174,6 +174,16 @@ describe("agent visibility", () => {
     expect(view.getByRole("button", { name: "Show cards" })).toBeTruthy();
   });
 
+  it("draws the selected agent's picture and leaves the other agents off the map", () => {
+    const view = render(AgentsView, { report: mockAgents(), entries: [], selectedAgent: "agent:52000", picture: "footprint", dark: false, reduced: true, onselectagent() {}, onentry() {}, ...actions });
+    const ids = [...view.container.querySelectorAll(".map .svelte-flow__node")].map((n) => n.getAttribute("data-id"));
+    expect(ids).toContain("agent:52000");
+    expect(ids).not.toContain("agent:51200");
+    expect(ids).not.toContain("agent:48000");
+    expect(view.container.querySelector(".map")?.textContent).toContain("Cursor: its folders, tools, ports and hosts.");
+    expect(view.getByRole("complementary", { name: "Agents" }).textContent).toContain("Claude Code");
+  });
+
   it("starts on the computer picture with Project disabled until a folder is chosen", async () => {
     const view = render(AgentsView, { report: mockAgents(), entries: [], selectedAgent: null, dark: false, reduced: true, onselectagent() {}, onentry() {}, ...actions });
     expect(view.getByRole("radio", { name: "Computer" }).getAttribute("aria-checked")).toBe("true");

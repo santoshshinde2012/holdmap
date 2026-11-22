@@ -3,7 +3,8 @@
   // access headline (sandboxed, your account, root…). Presentational: the focusable svelte-flow
   // wrapper carries the accessible name (footNodeLabel).
   import { Handle, Position, type NodeProps, type Node } from "@xyflow/svelte";
-  import { accessHeadline, counts, monogram, nodeResources, type FootFlowData } from "../../lib/agents";
+  import { accessHeadline, counts, monogram } from "../../lib/agents";
+  import { nodeResources, type FootFlowData } from "../../lib/agent-picture";
 
   let { data }: NodeProps<Node<FootFlowData>> = $props();
   const a = $derived(data.node.agent!);

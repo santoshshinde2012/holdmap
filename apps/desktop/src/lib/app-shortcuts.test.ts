@@ -40,11 +40,6 @@ describe("app shortcuts", () => {
     expect(intent("Escape", ctx(), off)).toEqual({ do: "list-deselect" });
   });
 
-  it("flips the Home layout with V only on Home", () => {
-    expect(intent("v", ctx(), state({ view: "home" }))).toEqual({ do: "toggle-home-layout" });
-    expect(intent("v", ctx(), state())).toBeNull();
-  });
-
   it("keeps list-only filters to the list", () => {
     expect(intent("d")).toEqual({ do: "toggle-dev" });
     expect(intent("d", ctx(), state({ view: "graph" }))).toBeNull();

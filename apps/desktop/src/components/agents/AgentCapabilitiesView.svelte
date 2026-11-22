@@ -6,7 +6,8 @@
   import CapabilityCatalog from "./capabilities/CapabilityCatalog.svelte";
   import CapabilityComparison from "./capabilities/CapabilityComparison.svelte";
   import CapabilityInspector from "./capabilities/CapabilityInspector.svelte";
-  import { agentColor, monogram } from "../../lib/agents";
+  import { monogram } from "../../lib/agents";
+  import { agentColor } from "../../lib/agent-picture";
   import { agentFocus } from "../../lib/agent-focus.svelte";
   import { isComposingKey } from "../../lib/keyboard";
   import type { AgentsReport, CapabilityScope } from "../../lib/types";
@@ -126,7 +127,7 @@
     inspector?.focusHeading();
     revealInline();
   }
-  // A 3D part names the exact server, skill, or running process. Apply it once the catalog
+  // A caller can name the exact server, skill, or running process. Apply it once the catalog
   // can see that item, then forget it so the sidebar stays where the user leaves it.
   $effect(() => {
     const id = agentFocus.capabilityId;

@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { MOCK_SNAPSHOT } from "./mock";
 import { mockAgents } from "./mock-agents";
-import { footNodeActs, footNodeLabel,
-  AGENT_W, FOOT_W, MACHINE_ID, accessFacts, accessHeadline, agentColor, agentMatches, column, columnX, contextGraph, counts, countsLine, edgeGeometry, filterAgents, folderAction, footprintGraph, folderSourceLabel, guessHome, headers,
-  layoutContext, layoutFootprint, layoutPicture, layoutProject, monogram, neighbours, parentName, pathContains, pictureColumn, pictureGraph, platformLabel, processRows, projectGraph, resourcesLine, shortLabel, signature, sizeOf, step, stoppableEntries, stoppablePorts, tildePath, toFootFlow,
-} from "./agents";
+import { accessFacts, accessHeadline, agentMatches, counts, countsLine, filterAgents, folderSourceLabel, guessHome, monogram, parentName, processRows, resourcesLine, shortLabel, step, stoppableEntries, stoppablePorts, tildePath } from "./agents";
+import { footNodeActs, footNodeLabel, AGENT_W, FOOT_W, MACHINE_ID, agentColor, column, columnX, contextGraph, edgeGeometry, folderAction, footprintGraph, headers, layoutContext, layoutFootprint, layoutPicture, layoutProject, neighbours, pathContains, pictureColumn, pictureGraph, platformLabel, projectGraph, scopeToAgent, signature, sizeOf, toFootFlow } from "./agent-picture";
 import type { AgentsReport } from "./types";
 import { preferredFolderOwner, resolveFolderTarget } from "./folders";
 
@@ -297,6 +295,24 @@ describe("agent search and process relationships", () => {
 });
 
 describe("pictures", () => {
+  it("keeps the selected agent's folders, ports and hosts and drops every other agent", () => {
+    const full = footprintGraph(report());
+    const g = scopeToAgent(full, "agent:51200");
+    expect(g.picture).toBe("footprint");
+    expect(g.nodes.filter((n) => n.kind === "agent").map((n) => n.id)).toEqual(["agent:51200"]);
+    expect(g.nodes.some((n) => n.kind === "machine")).toBe(false);
+    expect(g.nodes.every((n) => n.id === "agent:51200" || n.owners.every((o) => o === "agent:51200"))).toBe(true);
+    expect(g.edges.every((e) => g.nodes.some((n) => n.id === e.from) && g.nodes.some((n) => n.id === e.to))).toBe(true);
+    expect(g.edges.some((e) => e.kind === "parent")).toBe(false);
+    const shared = g.nodes.find((n) => n.id === "folder:/Users/dev/code/shop-web")!;
+    expect(shared.owners).toEqual(["agent:51200"]);
+    expect(g.nodes.some((n) => n.id === "folder:/Users/dev/code/docs")).toBe(false);
+    const ctx = scopeToAgent(contextGraph(report()), "agent:51200");
+    expect(ctx.nodes.some((n) => n.kind === "machine" || (n.kind === "agent" && n.id !== "agent:51200"))).toBe(false);
+    expect(ctx.edges.some((e) => e.kind === "parent" || e.kind === "host")).toBe(false);
+    expect(scopeToAgent(full, "missing")).toBe(full);
+  });
+
   it("draws computer context from observed agents, parent edges and remotes only", () => {
     const g = contextGraph(report());
     expect(g.picture).toBe("context");

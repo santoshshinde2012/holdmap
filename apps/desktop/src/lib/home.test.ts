@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attention, attentionAgent, hotAgents, overview } from "./home";
+import { attention, attentionAgent, overview } from "./home";
 import { MOCK_SNAPSHOT } from "./mock";
 import { mockAgents } from "./mock-agents";
 import type { Agent, AgentsReport, PortEntry } from "./types";
@@ -74,7 +74,7 @@ describe("configuration rules", () => {
 });
 
 describe("attention ownership", () => {
-  it("ties port items to the agent holding the port and keeps hot agents to agent-level rules", () => {
+  it("ties port items to the agent holding the port", () => {
     const r = mockAgents(undefined, true);
     const items = attention(entries, r);
     const docker = r.agents.find((a) => a.product === "docker-desktop")!;
@@ -82,8 +82,6 @@ describe("attention ownership", () => {
     expect(attentionAgent(exposed, r)).toBe(docker.id);
     expect(attentionAgent({ ...exposed, target: { view: "list", entryId: docker.ports[0].entry_id } }, r)).toBe(docker.id);
     expect(attentionAgent({ ...exposed, target: { view: "list", entryId: "nobody" } }, r)).toBeNull();
-    expect(hotAgents(items).size).toBe(0);
-    expect(hotAgents([{ ...exposed, rule: "root" }]).has(docker.id)).toBe(true);
   });
 });
 

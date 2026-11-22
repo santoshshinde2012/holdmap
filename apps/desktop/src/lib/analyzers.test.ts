@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { SANDBOX_LABEL, agentCounts, agentFindings, ago, canRun, countsText, emptyCounts, findingWhere, flaggedAgents, insightNeeds, total, worst, type Insights } from "./analyzers";
 import { DemoAnalyzers } from "./analyzers-demo";
-import { attention, hotAgents } from "./home";
+import { attention } from "./home";
 import { mockAgents } from "./mock-agents";
 import { InsightsStore, CHANGE_CHECK_MS } from "./insights-store.svelte";
 
@@ -76,14 +76,13 @@ describe("analyzer helpers", () => {
 });
 
 describe("home attention with analyzer findings", () => {
-  it("adds analyzer items and rings only high ones", () => {
+  it("adds analyzer items for the agent they belong to", () => {
     const base = attention(null, report);
     const withInsights = attention(null, report, demoInsights());
     const added = withInsights.filter((i) => i.rule === "analyzer");
     expect(withInsights.length).toBe(base.length + 1);
     const claude = report.agents.find((a) => a.product === "claude-code")!.id;
     expect(added[0].target).toEqual({ view: "agents", agentId: claude });
-    expect(hotAgents(withInsights).has(report.agents.find((a) => a.product === "claude-code")!.id)).toBe(true);
   });
 });
 

@@ -5,33 +5,14 @@ const home = async (app: import("@playwright/test").Page) => {
   return app.getByRole("region", { name: "Overview" });
 };
 
-test("home opens as cards, flips to the map with V, remembers it and keeps the selection", async ({ app }) => {
+test("home opens as cards and selects an agent", async ({ app }) => {
   const overview = await home(app);
-  const layout = overview.getByRole("radiogroup", { name: "Home layout" });
-  await expect(layout.getByRole("radio", { name: /^Cards/ })).toHaveAttribute("aria-checked", "true");
-  await expect(overview.getByRole("region", { name: "Agents" }).or(overview.locator("section[aria-label='Agents']"))).toBeVisible();
-  await overview.getByRole("button", { name: /^Cursor, (Standard|Restricted|Elevated|Unknown)/ }).first().click();
-  // Single-key shortcuts skip focused controls (like G), so leave the card button first.
-  await app.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  await app.keyboard.press("v");
-  await expect(layout.getByRole("radio", { name: /^Map/ })).toHaveAttribute("aria-checked", "true");
-  await expect(overview.getByRole("group", { name: "Machine map" })).toBeVisible();
-  await expect(overview.locator(".map g.agent[aria-pressed='true']")).toHaveAttribute("aria-label", /^Cursor,/);
-  await expect(overview.locator(".lane.active")).toContainText("Cursor");
-  await app.reload();
-  await home(app);
-  await expect(app.getByRole("radiogroup", { name: "Home layout" }).getByRole("radio", { name: /^Map/ })).toHaveAttribute("aria-checked", "true");
-});
-
-test("the map selects on the first click and opens the agent on the second", async ({ app }) => {
-  const overview = await home(app);
-  await overview.getByRole("radiogroup", { name: "Home layout" }).getByRole("radio", { name: /^Map/ }).click();
-  await expect(overview.getByRole("table", { name: "Agent lanes" })).toBeVisible();
-  const cursor = overview.locator(".map g.agent[aria-label^='Cursor,']");
+  await expect(overview.getByRole("radiogroup", { name: "Home layout" })).toHaveCount(0);
+  await expect(overview.locator("section[aria-label='Agents']")).toBeVisible();
+  const cursor = overview.getByRole("button", { name: /^Cursor, (Standard|Restricted|Elevated|Unknown)/ }).first();
   await cursor.click();
   await expect(cursor).toHaveAttribute("aria-pressed", "true");
-  await cursor.click();
-  await expect(app.getByRole("radio", { name: /^Agents/ })).toHaveAttribute("aria-checked", "true");
+  await expect(cursor.locator("xpath=ancestor::article[1]")).toHaveClass(/selected/);
 });
 
 test("the inventory button adds MCP servers to the cards", async ({ app }) => {
@@ -52,19 +33,19 @@ test("Home search filters agents, and a port number opens the list", async ({ ap
   await expect(app.getByLabel("Search ports", { exact: true })).toHaveValue("3000");
 });
 
-for (const layout of ["cards", "map"] as const) for (const width of [390, 1024, 1280, 1440]) {
-  test(`${layout} at ${width}px: no overflow, no clipped text, no layout jump`, async ({ app }) => {
-    await app.evaluate((l) => { localStorage.setItem("holdmap.agents.inventory", "1"); localStorage.setItem("holdmap.home.layout", l); }, layout);
+for (const width of [390, 1024, 1280, 1440]) {
+  test(`cards at ${width}px: no overflow, no clipped text, no layout jump`, async ({ app }) => {
+    await app.evaluate(() => localStorage.setItem("holdmap.agents.inventory", "1"));
     await app.reload();
     await app.setViewportSize({ width, height: 900 });
     const overview = await home(app);
     await expect(overview.getByRole("button", { name: /^MCP filesystem/ }).first()).toBeVisible();
-    const target = layout === "cards" ? overview.locator("section[aria-label='Agents']") : overview.getByRole("table", { name: "Agent lanes" });
+    const target = overview.locator("section[aria-label='Agents']");
     // Page coordinates: clicking may scroll the page, which is not a layout jump.
     const box = () => target.evaluate((el) => { const r = el.getBoundingClientRect(); const top = el.closest(".home")!.firstElementChild!.getBoundingClientRect(); return { x: r.left - top.left, y: r.top - top.top, w: r.width, h: r.height }; });
     const before = await box();
     // Hover and select an agent: highlighting must not move anything.
-    const who = layout === "cards" ? overview.getByRole("button", { name: /^Claude Code, / }).first() : overview.getByRole("button", { name: /^Claude Code, up / });
+    const who = overview.getByRole("button", { name: /^Claude Code, / }).first();
     await who.hover();
     await who.click();
     await overview.getByRole("button", { name: "Docker Desktop is listening on all interfaces", exact: true }).hover();
@@ -92,82 +73,14 @@ for (const layout of ["cards", "map"] as const) for (const width of [390, 1024, 
       return { listInside: !list || (list.top >= panel.top - 0.5 && list.bottom <= panel.bottom + 0.5), alertAboveList: !list || !alert || alert.bottom <= list.top + 0.5 };
     });
     expect(needsBox).toEqual({ listInside: true, alertAboveList: true });
-    if (layout === "cards") {
-      // Cards in a row share one height.
-      const uneven = await overview.evaluate((root) => {
-        const rows = new Map<number, number[]>();
-        for (const c of root.querySelectorAll<HTMLElement>("section[aria-label='Agents'] > article")) { const r = c.getBoundingClientRect(); rows.set(Math.round(r.top), [...(rows.get(Math.round(r.top)) ?? []), Math.round(r.height)]); }
-        return [...rows.values()].filter((hs) => new Set(hs).size > 1);
-      });
-      expect(uneven).toEqual([]);
-    } else {
-      const outside = await overview.evaluate((root) => [...root.querySelectorAll<HTMLElement>(".lane .pin span")].filter((s) => {
-        const lane = s.closest(".lane")!.getBoundingClientRect(); const r = s.getBoundingClientRect();
-        return r.left < lane.left - 0.5 || r.right > lane.right + 0.5;
-      }).map((s) => s.textContent));
-      expect(outside).toEqual([]);
-      if (width <= 760) await expect(overview.getByRole("list", { name: "Machine map" })).toBeVisible();
-      else {
-        // Selecting an agent zooms to its sector; fitting again brings every label back.
-        const map = overview.getByRole("group", { name: /^Machine map/ });
-        const zoomed = await map.getAttribute("viewBox");
-        await overview.getByRole("button", { name: /^(Show every agent|Fit the map)$/ }).click();
-        expect(await map.getAttribute("viewBox")).not.toBe(zoomed);
-        // Every map label sits inside the stage: nothing clips at the edges.
-        const off = await overview.evaluate((root) => {
-          const stage = root.querySelector(".stage")!.getBoundingClientRect();
-          return [...root.querySelectorAll<SVGTextElement>(".map text")].filter((t) => { const r = t.getBoundingClientRect(); return r.width > 0 && (r.left < stage.left || r.right > stage.right || r.top < stage.top || r.bottom > stage.bottom); }).map((t) => t.textContent);
-        });
-        expect(off).toEqual([]);
-      }
-    }
+    const uneven = await overview.evaluate((root) => {
+      const rows = new Map<number, number[]>();
+      for (const c of root.querySelectorAll<HTMLElement>("section[aria-label='Agents'] > article")) { const r = c.getBoundingClientRect(); rows.set(Math.round(r.top), [...(rows.get(Math.round(r.top)) ?? []), Math.round(r.height)]); }
+      return [...rows.values()].filter((hs) => new Set(hs).size > 1);
+    });
+    expect(uneven).toEqual([]);
   });
 }
-
-test("map labels never overlap and remote hosts fold into one expandable chip", async ({ app }) => {
-  await app.evaluate(() => localStorage.setItem("holdmap.home.layout", "map"));
-  await app.reload();
-  await app.setViewportSize({ width: 1280, height: 900 });
-  const overview = await home(app);
-  const map = overview.getByRole("group", { name: /^Machine map/ });
-  const overlapping = () => map.evaluate((svg) => {
-    // What people see: each node's shape and label text (not its invisible hit circle).
-    const boxes = [...svg.querySelectorAll<SVGGElement>("g.sat")].map((g) => {
-      const rs = [...g.querySelectorAll<SVGGraphicsElement>(":scope > g.body > :not(.hit), :scope > :not(.hit):not(title):not(g)")].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0);
-      const r = { left: Math.min(...rs.map((r) => r.left)), right: Math.max(...rs.map((r) => r.right)), top: Math.min(...rs.map((r) => r.top)), bottom: Math.max(...rs.map((r) => r.bottom)), width: 1 };
-      return { name: g.getAttribute("aria-label"), r };
-    }).filter((b) => Number.isFinite(b.r.left));
-    const hits: string[] = [];
-    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
-      const a = boxes[i].r, b = boxes[j].r;
-      if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) hits.push(`${boxes[i].name} × ${boxes[j].name}`);
-    }
-    return hits;
-  });
-  expect(await overlapping()).toEqual([]);
-  const chip = map.getByRole("button", { name: /^6 remote hosts/ });
-  await expect(chip).toHaveAttribute("aria-expanded", "false");
-  await chip.click();
-  await expect(map.getByRole("button", { name: /^Remote host .*2001:db8/ }).first()).toBeVisible();
-  // What people see once the expanded group has drawn (the first frame after the DOM update can
-  // still report the previous boxes).
-  await expect.poll(overlapping).toEqual([]);
-  const hide = map.getByRole("button", { name: /^Hide 6 remote hosts/ });
-  await expect(hide).toHaveAttribute("aria-expanded", "true");
-  await hide.click();
-  await expect(map.getByRole("button", { name: /^6 remote hosts/ })).toBeVisible();
-  // Long labels are shortened on the map and carry the full text as a tooltip.
-  await chip.click();
-  const long = map.locator("g.sat", { has: app.locator("title", { hasText: "2001:db8:4700:4408::ac40:9bd1" }) });
-  await expect(long).toHaveCount(1);
-  expect(await long.locator("text.s").textContent()).toContain("…");
-  // Zoom and pan stay inside the map.
-  const before = await map.getAttribute("viewBox");
-  await overview.getByRole("button", { name: "Zoom in" }).click();
-  expect(await map.getAttribute("viewBox")).not.toBe(before);
-  await map.focus(); await app.keyboard.press("0");
-  expect(await map.getAttribute("viewBox")).toBe(before);
-});
 
 test("first open shows the welcome once", async ({ page }) => {
   await page.addInitScript(() => { if (!sessionStorage.getItem("seeded")) { localStorage.clear(); sessionStorage.setItem("seeded", "1"); } });
@@ -198,36 +111,3 @@ test("a port chip on a Home card stops through the stop plan, and Cancel stops n
   await expect(chip).toBeVisible();
 });
 
-test("a port node on the Home map stops through the stop plan, and Esc closes its menu", async ({ app }) => {
-  const overview = await home(app);
-  await overview.getByRole("radiogroup", { name: "Home layout" }).getByRole("radio", { name: /^Map/ }).click();
-  const node = overview.locator(".map g.sat[aria-label^='Port :3000']").first();
-  await node.click();
-  const menu = app.getByRole("menu", { name: /^:3000 / });
-  await expect(menu).toBeVisible();
-  await app.keyboard.press("Escape");
-  await expect(menu).toHaveCount(0);
-  await node.click();
-  await menu.getByRole("menuitem", { name: "Stop…", exact: true }).click();
-  const review = app.getByRole("alertdialog");
-  await expect(review.getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();
-  await review.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(review).toHaveCount(0);
-});
-
-test("on a narrow screen the map lists each agent's ports, and Stop… still opens the stop plan", async ({ app }) => {
-  await app.setViewportSize({ width: 390, height: 844 });
-  const overview = await home(app);
-  await overview.getByRole("radiogroup", { name: "Home layout" }).getByRole("radio", { name: /^Map/ }).click();
-  const chip = overview.getByRole("list", { name: "Cursor ports" }).getByRole("button", { name: /^Port 3000/ });
-  await expect(chip).toBeVisible();
-  await chip.click();
-  const menu = app.getByRole("menu", { name: /^:3000 / });
-  const box = await menu.boundingBox();
-  expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
-  await menu.getByRole("menuitem", { name: "Stop…", exact: true }).click();
-  const review = app.getByRole("alertdialog");
-  await expect(review.getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();
-  await review.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(review).toHaveCount(0);
-});

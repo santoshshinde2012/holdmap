@@ -1,8 +1,7 @@
 // The app's remembered choices: each is reactive state read once from `holdmap.*` and written
 // back whenever it changes. Create it during component setup so the write-back effects run.
 import type { View } from "../components/shell/ViewToolbar.svelte";
-import type { Picture } from "./agents";
-import { HOME_LAYOUTS, type HomeLayout } from "./home-layout";
+import type { Picture } from "./agent-picture";
 import { prefGet, prefGetBoolean, prefGetChoice, prefSet } from "./prefs";
 import { parseCollapsed, parseDensity, type Density } from "./rows";
 import { SORTS, type Sort } from "./port-list";
@@ -26,8 +25,6 @@ export class AppPrefs {
   singleKeyShortcuts = $state(prefGetBoolean("singleKeyShortcuts", true));
   sort = $state<Sort>(prefGetChoice("sort", SORTS, "group"));
   collapsed = $state<Set<string>>(parseCollapsed(prefGet("collapsed")));
-  homeLayout = $state<HomeLayout>(prefGetChoice("home.layout", HOME_LAYOUTS, "cards"));
-  homeTimeline = $state(prefGetBoolean("home.timeline", true));
   agentSection = $state<AgentSection>(prefGetChoice("agents.section", AGENT_SECTIONS, "overview"));
   inventoryOn = $state(prefGetBoolean("agents.inventory", false));
   flowSource = $state<FlowSource>(prefGetChoice("flow.source", FLOW_SOURCES, "connections"));
@@ -43,8 +40,6 @@ export class AppPrefs {
     $effect(() => prefSet("singleKeyShortcuts", flag(this.singleKeyShortcuts)));
     $effect(() => prefSet("sort", this.sort));
     $effect(() => prefSet("collapsed", JSON.stringify([...this.collapsed])));
-    $effect(() => prefSet("home.layout", this.homeLayout));
-    $effect(() => prefSet("home.timeline", flag(this.homeTimeline)));
     $effect(() => prefSet("agents.section", this.agentSection));
     $effect(() => prefSet("agents.inventory", flag(this.inventoryOn)));
     $effect(() => prefSet("flow.source", this.flowSource));

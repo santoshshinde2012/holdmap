@@ -1,6 +1,6 @@
 ---
 title: What's new
-description: "What's new in holdmap 0.14.0: one agent in 3D, details that fold in place, and a numbered menu bar."
+description: "What's new in holdmap 0.14.0: Home as cards, details that fold in place, and a numbered menu bar."
 order: 1.5
 ---
 
@@ -12,7 +12,7 @@ notes for each version.
 
 **holdmap 0.14.0** makes one agent, and the menu bar, easier to read.
 
-- **One agent in 3D.** The first click fills the canvas with that agent. **All agents** brings the machine back. A second click opens Overview, MCP & skills, Flow, Results or Security, and a skill or MCP server opens that item. [Desktop guide](../desktop/).
+- **Home is cards.** One card per agent, with projects, ports, MCP servers and skills, and Needs you beside them. The Agents map is the one spatial picture, and selecting an agent keeps that picture on the agent. [Desktop guide](../desktop/).
 - **Details fold in place.** Readings and facts fold inside Details and stay that way. Each **Needs you** row opens its explanation in the row. The same fold is used for an agent's access, folders and ports, a graph peer's process and connections, and Flow facts. **Open in Flow** opens Connections.
 - **A numbered menu bar.** Ports, Network, Needs and Dev stay on screen. Choosing a count scrolls to that reading, and each top agent shows its share of the RAM. Needs you, dev servers and the activity charts stay. [Menu bar and tray](../desktop/#menu-bar-and-tray).
 - **The service graph stays.** It is the map of who is connected to whom, including clients that are not listening. Counts sit in one toolbar, and separate groups pack into a compact board.

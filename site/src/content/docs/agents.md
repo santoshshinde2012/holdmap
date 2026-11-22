@@ -68,8 +68,8 @@ matching known account, and do not establish current work by a particular runnin
   **Overview** then reveals **Computer**, **Footprint** and **Project**; **Flow** reveals
   **Connections** and **Calls**. The **MCP & skills** workspace uses the
   explicit inspection described below. Computer is this machine, the agents running on it, and observed
-  outside systems, with parent `started` edges. **Footprint** shows folders, tools, ports and hosts
-  across every agent. Click a folder to zoom into **Project** — only agents, ports, tools and hosts
+  outside systems, with parent `started` edges. **Footprint** shows folders, tools, ports and hosts.
+  Click a folder to zoom into **Project** — the agents, ports, tools and hosts
   observed for that source tree — never sample or invented peers. **Hide cards** and **Legend** give the map the full width; both persist.
   The installed app and `npm run dev` read the live process table; the website demo uses labelled sample data.
 - **TUI:** start `holdmap`, then press **Shift+Tab** to open Agents directly. **Tab** cycles
@@ -86,17 +86,19 @@ matching known account, and do not establish current work by a particular runnin
   **y** confirms. The batch is freshly checked before any action. Changed targets require a new
   review; failures stop remaining plans and show what completed. Agent sessions stay running.
 
-Select an agent from the list, a map node, the Home map, **↑/↓** or search and its details open
-beside the map. That screen shows who the agent is, its memory and access, the folders and
-processes it is running, and the ports it serves. **Open in MCP & skills**, **Open in Flow**
+Select an agent from the list, a map node, a Home card, **↑/↓** or search and its details open
+beside the map. The picture becomes that agent alone: its folders, ports, tools and the hosts it
+talks to. Computer, Footprint and Project stay as zooms of that agent. The details show who it is,
+its memory and access, the folders and processes it is running, and the ports it serves.
+**Open in MCP & skills**, **Open in Flow**
 and **Open in Security** open those screens already scoped to the agent. Once local config has
 been read, servers, skills and file locations stay behind **Configuration**. The selection stays
 across tabs, pictures, reloads (`#agent=` link) and restarts.
-**Esc**, **✕** or a click on empty canvas clears it. In a mid-size window the details float over
+**Esc**, **✕** or a click on empty canvas clears it and brings every agent back. In a mid-size window the details float over
 the map's right edge and the map fits into the space left; in a narrow one the agent list and the
 details stack, and closing the details brings the map back.
 
-![Agent details beside the Computer map for a selected Claude Code session](../../../../docs/screenshots/desktop-agent-details-light.png)
+![Agent details beside Claude Code's own picture: the agent and the systems it talks to](../../../../docs/screenshots/desktop-agent-details-light.png)
 
 These browser captures show **Computer** and one selected **Project** using sample data:
 

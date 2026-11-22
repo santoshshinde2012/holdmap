@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { useSvelteFlow } from "@xyflow/svelte";
+  import { cardInside, cardZoom, fitZoom } from "../../../lib/flow-camera";
   import { FIT_PADDING } from "../../../lib/flow";
   import { CAPABILITY_MAP_NODE_HEIGHT, CAPABILITY_MAP_NODE_WIDTH, type CapabilityGraphPoint } from "../../../lib/agent-capability-map";
 
@@ -19,15 +20,11 @@
   function showIfNeeded(target: CapabilityGraphPoint, duration: number) {
     if (width <= 0 || height <= 0) return;
     const viewport = flow.getViewport();
-    const halfWidth = CAPABILITY_MAP_NODE_WIDTH * viewport.zoom / 2;
-    const halfHeight = CAPABILITY_MAP_NODE_HEIGHT * viewport.zoom / 2;
-    const x = target.x * viewport.zoom + viewport.x;
-    const y = target.y * viewport.zoom + viewport.y;
     const margin = 16;
-    if (viewport.zoom >= READABLE_ZOOM && x - halfWidth >= margin && x + halfWidth <= width - margin
-      && y - halfHeight >= margin && y + halfHeight <= height - margin) return;
-    const cardFit = Math.min((width - margin * 2) / CAPABILITY_MAP_NODE_WIDTH, (height - margin * 2) / CAPABILITY_MAP_NODE_HEIGHT);
-    const zoom = Math.max(READABLE_ZOOM, Math.min(Math.max(READABLE_ZOOM, viewport.zoom), cardFit));
+    const card = { width: CAPABILITY_MAP_NODE_WIDTH, height: CAPABILITY_MAP_NODE_HEIGHT };
+    const inset = { left: margin, right: margin, top: margin, bottom: margin };
+    if (cardInside(viewport, target, card, { width, height }, inset, READABLE_ZOOM)) return;
+    const zoom = cardZoom(viewport.zoom, READABLE_ZOOM, fitZoom(card, width - margin * 2, height - margin * 2));
     void flow.setCenter(target.x, target.y, { zoom, duration });
   }
 

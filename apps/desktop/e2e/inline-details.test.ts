@@ -95,13 +95,10 @@ test("a skill card shows its findings and its details offer Scan with…, gated 
   await expect(scan.getByRole("status")).toContainText("SkillSpector");
 });
 
-test("the map's zoom toolbar and expandable chip pass axe", async ({ app }) => {
-  await app.evaluate(() => localStorage.setItem("holdmap.home.layout", "map"));
-  await app.reload();
+test("Home cards and Needs you pass axe", async ({ app }) => {
   await app.getByRole("radio", { name: /^Home/ }).click();
-  const map = app.getByRole("group", { name: /^Machine map/ });
-  await map.getByRole("button", { name: /^6 remote hosts/ }).click();
-  await axe(app, ".map-wrap");
+  await expect(app.locator("section[aria-label='Agents'] article.card").first()).toBeVisible();
+  await axe(app, "#home-overview");
 });
 
 test("Flow's relationship details close with Esc and return focus", async ({ app }) => {

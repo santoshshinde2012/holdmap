@@ -179,20 +179,59 @@ function packComponents(g: Graph, mode: LayoutMode, iterations = 260, direction:
   // A portrait screen packs into fewer, taller columns.
   const aspect = direction === "TB" ? 0.5 : 1.6;
   const columns = Math.max(1, Math.round((Math.sqrt(area * aspect) + COMPONENT_GAP) / (NODE_W + COMPONENT_GAP)));
-  const rowWidth = Math.max(Math.max(...blocks.map((b) => b.bounds.width)), columns * (NODE_W + COMPONENT_GAP) - COMPONENT_GAP);
-  const rows: { x: number; y: number; height: number }[] = [];
+  const widest = Math.max(...blocks.map((b) => b.bounds.width));
+  // Leave room for one card beside the widest group, so a short service can use that strip.
+  const beside = blocks.length > 1 ? COMPONENT_GAP + NODE_W : 0;
+  const rowWidth = Math.max(widest + beside, columns * (NODE_W + COMPONENT_GAP) - COMPONENT_GAP);
+  // Free rectangles. A short group can sit under another short group, beside a taller one,
+  // instead of leaving that strip empty and starting a new row below the tall group.
+  type Free = { x: number; y: number; w: number; h: number };
+  const placed: Free[] = [];
+  const free: Free[] = [{ x: 0, y: 0, w: rowWidth, h: Number.POSITIVE_INFINITY }];
   const out: Positions = new Map();
+  const bottomOf = () => placed.reduce((max, box) => Math.max(max, box.y + box.h), 0);
+  const refreshFloor = () => {
+    for (let i = free.length - 1; i >= 0; i--) {
+      const slot = free[i];
+      if (slot.h === Number.POSITIVE_INFINITY && slot.x === 0 && slot.w === rowWidth && slot.y > 0) free.splice(i, 1);
+    }
+    const bottom = bottomOf();
+    if (bottom > 0) free.push({ x: 0, y: bottom + COMPONENT_GAP, w: rowWidth, h: Number.POSITIVE_INFINITY });
+  };
   for (const block of blocks) {
-    let row = rows.find((r) => r.height >= block.bounds.height && r.x + block.bounds.width <= rowWidth);
-    if (!row) {
-      const previous = rows.at(-1);
-      row = { x: 0, y: previous ? previous.y + previous.height + COMPONENT_GAP : 0, height: block.bounds.height };
-      rows.push(row);
+    const w = block.bounds.width, h = block.bounds.height;
+    let best = -1;
+    for (let i = 0; i < free.length; i++) {
+      const slot = free[i];
+      if (w > slot.w + 0.5 || h > slot.h) continue;
+      if (best < 0) { best = i; continue; }
+      const chosen = free[best];
+      if (slot.y < chosen.y || (slot.y === chosen.y && slot.x < chosen.x)) best = i;
+    }
+    let x: number, y: number;
+    if (best < 0) {
+      x = 0;
+      y = bottomOf() === 0 ? 0 : bottomOf() + COMPONENT_GAP;
+    } else {
+      const slot = free.splice(best, 1)[0];
+      x = slot.x;
+      y = slot.y;
+      const rightW = slot.w - w - COMPONENT_GAP;
+      if (rightW > 1) free.push({ x: x + w + COMPONENT_GAP, y, w: rightW, h: slot.h });
+      // Only as far as a taller neighbour. Past that, the floor slot starts the next row.
+      let limit = y + h;
+      for (const box of placed) {
+        const beside = box.x + box.w + COMPONENT_GAP <= x + 0.5 || x + w + COMPONENT_GAP <= box.x + 0.5;
+        if (beside && box.y < y + h && y < box.y + box.h) limit = Math.max(limit, box.y + box.h);
+      }
+      const belowH = limit - (y + h + COMPONENT_GAP);
+      if (belowH > 1) free.push({ x, y: y + h + COMPONENT_GAP, w, h: belowH });
     }
     for (const [id, point] of block.positions) {
-      out.set(id, { x: row.x + point.x - block.bounds.x, y: row.y + point.y - block.bounds.y });
+      out.set(id, { x: x + point.x - block.bounds.x, y: y + point.y - block.bounds.y });
     }
-    row.x += block.bounds.width + COMPONENT_GAP;
+    placed.push({ x, y, w, h });
+    refreshFloor();
   }
   return out;
 }

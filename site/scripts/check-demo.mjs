@@ -92,18 +92,13 @@ try {
     await page.locator(".try:not([disabled])").first().waitFor({ timeout: 5000 });
     await measureViewport("loaded");
   });
-  await check("Home switches Cards and Map and folds the Map timeline", async () => {
-    const layout = frame.getByRole("radiogroup", { name: "Home layout", exact: true });
-    await layout.getByRole("radio", { name: "Map", exact: true }).click();
-    await frame.getByRole("article", { name: "Cursor", exact: true }).waitFor({ state: "detached" });
-    const timeline = frame.locator("#lanes-title");
-    await timeline.click();
-    if (await timeline.getAttribute("aria-expanded") !== "false") throw new Error("Timeline must fold");
-    await frame.locator("#agent-lanes").waitFor({ state: "detached" });
-    await timeline.click();
-    if (await timeline.getAttribute("aria-expanded") !== "true") throw new Error("Timeline must reopen");
-    await frame.locator("#agent-lanes").waitFor();
-    await layout.getByRole("radio", { name: "Cards", exact: true }).click();
+  await check("Home opens as cards and folds its summary", async () => {
+    await frame.getByRole("article", { name: "Cursor", exact: true }).waitFor();
+    await frame.getByRole("button", { name: "Fold the summary", exact: true }).click();
+    // Folding renames the control, so the next check has to look up the new name.
+    const folded = frame.getByRole("button", { name: "Show the summary", exact: true });
+    if (await folded.getAttribute("aria-expanded") !== "false") throw new Error("Summary must fold");
+    await folded.click();
     await frame.getByRole("article", { name: "Cursor", exact: true }).waitFor();
   });
   await check("Home port menu offers Details and a simulated stop plan that asks first", async () => {
@@ -427,25 +422,22 @@ try {
     await page.setViewportSize({ width: 1440, height: 900 });
   });
 
-  await check("Public Home showcase offers a readable 3D preview", async () => {
+  await check("Public Home showcase offers a readable Cards preview", async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    const tab = page.getByRole("tab", { name: "3D", exact: true });
-    await tab.click();
-    const panel = page.locator("#home-3d");
+    const panel = page.locator("#home-cards");
     await panel.waitFor({ state: "visible" });
     const image = panel.locator("img:visible").first();
     await image.scrollIntoViewIfNeeded();
     await image.evaluate(image => image.decode());
-    if (!(await image.getAttribute("alt"))?.includes("Home in 3D")) throw new Error("3D preview needs descriptive alt text");
+    if (!(await image.getAttribute("alt"))?.includes("Home as Cards")) throw new Error("Cards preview needs descriptive alt text");
     await page.setViewportSize({ width: 390, height: 900 });
-    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw new Error("3D preview overflows on mobile");
-    await page.getByRole("tab", { name: "Cards", exact: true }).click();
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) throw new Error("Cards preview overflows on mobile");
   });
 
   const guideBase = new URL("./", page.url());
   const checkGuideImages = async (viewport) => {
     await page.setViewportSize(viewport);
-    for (const [route, count] of [["agents", 16], ["desktop", 18], ["whats-new", 1]]) {
+    for (const [route, count] of [["agents", 16], ["desktop", 15], ["whats-new", 1]]) {
       await page.goto(new URL(`docs/${route}/`, guideBase).href, { waitUntil: "domcontentloaded" });
       const images = page.locator(".prose img");
       if (await images.count() !== count) throw new Error(`${route}: expected ${count} guide screenshots`);

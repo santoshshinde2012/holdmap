@@ -35,10 +35,6 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/desktop-home-3d-light.png" width="860" alt="holdmap Home in 3D: agent districts with CPU and memory readings, runtime and configuration layers, and Needs you (sample data)" />
-</p>
-
-<p align="center">
   <img src="docs/screenshots/desktop-capability-inline-light.png" width="420" alt="MCP & skills: a skill card opens its details in the right sidebar, with Scan with… (sample data)" />
   <img src="docs/screenshots/desktop-security-analyzers-light.png" width="420" alt="Agents → Security → Analyzers: cards with publisher, what each checks, on/off or installed state and one action; all off by default (sample data)" />
 </p>
@@ -70,16 +66,9 @@
   pinned analyzers from the app after a consent step, follow runs in a progress dock, and
   review results by agent, folder and source path, exported as JSON, SARIF, CSV or Markdown.
   Add any MCP server in three steps: source, tools, review.
-- **Home, maps and graphs.** Agents as Cards or a Map with a Timeline and a **Needs you**
-  list, the service graph with clusters, and agent flow.
-- **3D machine.** Home's **3D** layout builds the same agents as a model you can
-  take apart: a district per agent with its tower, folders and ports, its processes and the
-  configuration found on disk on trays above it, CPU gauges, network ripples and connections that
-  move their way. Click an agent and that district fills the picture, with a way back to every
-  agent. Lenses show one concern at a time, with X-ray, a floor plan and a guided tour.
-  A selected part opens that agent's Overview, MCP & skills, Flow, Results or Security,
-  and a skill or MCP server opens that item.
-  Every link comes from what holdmap observed; nothing is joined by name.
+- **Home, maps and graphs.** Home is one card per agent, with a **Needs you** list. The Agents
+  map is the spatial picture. The service graph shows clusters and connections, and agent flow
+  shows who talks to whom.
 - **Menu bar and tray widgets.** Small menu-bar items on macOS like a system
   monitor's (agents, what needs you, their CPU, dev servers, a CPU line or per-agent bars) and a
   badge on every OS. A click opens a numbered panel: agents, RAM and CPU, then Ports, Network,
@@ -318,7 +307,7 @@ scanners are on real skills.
 | [Agents, tools and apps](https://santoshshinde2012.github.io/holdmap/docs/agents/) | Agent inventory, MCP and skills, flow and recording |
 | [Analyzers](https://santoshshinde2012.github.io/holdmap/docs/analyzers/) | Opt-in scanners, presets, sandboxes and findings |
 | [Analyzers, end to end](docs/analyzers.md) | Steps to follow, a 3-minute demo and every screen |
-| [Desktop app](https://santoshshinde2012.github.io/holdmap/docs/desktop/) | Home in Cards, Map or 3D, tray widgets, quick settings, capture and first open |
+| [Desktop app](https://santoshshinde2012.github.io/holdmap/docs/desktop/) | Home cards, tray widgets, quick settings, capture and first open |
 | [What's new](https://santoshshinde2012.github.io/holdmap/docs/whats-new/) | Published release highlights and how to upgrade |
 | [MCP for AI agents](https://santoshshinde2012.github.io/holdmap/docs/mcp/) | Client setup, tools and stop confirmation |
 | [Project stacks](https://santoshshinde2012.github.io/holdmap/docs/projects/) | `.holdmap.toml`, `holdmap up` and `down` |

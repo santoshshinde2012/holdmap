@@ -2,7 +2,7 @@
   // Edge between an agent and its footprint, in the agent's colour. The path is precomputed by
   // the layout (lib/agents.ts), so it ignores handle coordinates. Dashed: recent, inferred or remote.
   import { BaseEdge, EdgeLabel, type EdgeProps, type Edge } from "@xyflow/svelte";
-  import type { FootFlowEdgeData } from "../../lib/agents";
+  import type { FootFlowEdgeData } from "../../lib/agent-picture";
 
   let { id, data }: EdgeProps<Edge<FootFlowEdgeData>> = $props();
   const e = $derived(data!.edge);

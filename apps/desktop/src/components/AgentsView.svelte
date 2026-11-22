@@ -19,7 +19,8 @@
   import FolderActions from "./FolderActions.svelte";
   import type { AgentFlowProps } from "../lib/agent-flow/model";
   import { FIT_MIN_ZOOM, FIT_PADDING } from "../lib/flow";
-  import { agentColor, filterAgents, layoutPicture, pictureGraph, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Picture, type Positions } from "../lib/agents";
+  import { filterAgents } from "../lib/agents";
+  import { agentColor, layoutPicture, pictureGraph, scopeToAgent, signature, toFootFlow, type FootFlowEdge, type FootFlowNode, type FootNode as FNode, type Picture, type Positions } from "../lib/agent-picture";
   import type { AgentsReport, PortEntry } from "../lib/types";
   import { prefGet, prefGetBoolean, prefSet } from "../lib/prefs";
   import { onDestroy, tick, untrack } from "svelte";
@@ -163,7 +164,11 @@
 
   const visibleAgents = $derived(report ? filterAgents(report.agents, query) : []);
   const agentIds = $derived(report?.agents.map((a) => a.id) ?? []);
-  const graph = $derived(report ? pictureGraph({ ...report, agents: visibleAgents }, picture, { recent, folder: projectPath }) : null);
+  const graph = $derived.by(() => {
+    if (!report) return null;
+    const full = pictureGraph({ ...report, agents: visibleAgents }, picture, { recent, folder: projectPath });
+    return selectedAgent && full.nodes.some((n) => n.id === selectedAgent) ? scopeToAgent(full, selectedAgent) : full;
+  });
   const sig = $derived(graph ? signature(graph) : "");
   // Re-layout only when the structure changes, so refreshes don't make nodes jump.
   const cache: { sig: string; pos: Positions } = { sig: "", pos: new Map() };
@@ -205,10 +210,13 @@
     picked = picked === n.id ? null : n.id;
   }
   /** The selected agent's full details, next to the map (any picture). */
-  /** The picked agent and everything it touches: what to keep readable when a docked panel leaves the map little room. */
+  /** The picked agent and everything it touches, when the map still shows the rest of the machine.
+   *  A selected agent's own picture is already only those nodes, so the camera fits all of it. */
   const near = $derived.by(() => {
     const id = selectedAgent;
     if (!id || !graph) return [];
+    const agents = graph.nodes.filter((n) => n.kind === "agent");
+    if (agents.length === 1 && agents[0].id === id) return [];
     return [...new Set([id, ...graph.edges.filter((e) => e.from === id || e.to === id).flatMap((e) => [e.from, e.to])])];
   });
   const selectedInfo = $derived(report?.agents.find((a) => a.id === selectedAgent) ?? null);
@@ -271,11 +279,15 @@
     folders: graph?.nodes.filter((n) => n.kind === "folder").length ?? 0,
     ports: graph?.nodes.filter((n) => n.kind === "port" || n.kind === "service").length ?? 0,
     hosts: graph?.nodes.filter((n) => n.kind === "remote").length ?? 0,
-    omittedLinks: picture === "footprint" ? visibleAgents.reduce((s, a) => s + a.more_links, 0) : 0,
+    omittedLinks: picture === "footprint" ? visibleAgents.filter((a) => graph?.nodes.some((n) => n.id === a.id)).reduce((s, a) => s + a.more_links, 0) : 0,
   } : null);
+  /** The map is this agent's picture: the selected agent is one of the nodes. */
+  const agentPicture = $derived(!!selectedInfo && !!graph?.nodes.some((n) => n.id === selectedInfo.id));
   const legend = $derived(
     picture === "context"
-      ? [["machine", "This computer", "monitor"], ["agent", "Agent", "bot"], ["remote", "Remote host", "globe"]] as [string, string, string][]
+      ? (agentPicture
+        ? [["agent", "Agent", "bot"], ["remote", "Remote host", "globe"]]
+        : [["machine", "This computer", "monitor"], ["agent", "Agent", "bot"], ["remote", "Remote host", "globe"]]) as [string, string, string][]
       : [
           ["agent", "Agent", "bot"],
           ["folder", picture === "project" ? "This project" : "Folder", "folder"],
@@ -286,11 +298,17 @@
         ] as [string, string, string][],
   );
   const pictureHint = $derived(
-    picture === "context"
-      ? "Context — this computer, the agents on it, and systems they talk to. Open Footprint for folders and ports."
-      : picture === "project"
-        ? `Components in ${projectLabel} — click the folder again for Reveal / Editor.`
-        : "Containers — click a folder to zoom into that source tree.",
+    agentPicture && selectedInfo
+      ? picture === "context"
+        ? `${selectedInfo.name}: this agent and the systems it talks to.`
+        : picture === "project"
+          ? `${selectedInfo.name} in ${projectLabel}: its ports, tools and hosts in this source tree.`
+          : `${selectedInfo.name}: its folders, tools, ports and hosts.`
+      : picture === "context"
+        ? "Context — this computer, the agents on it, and systems they talk to. Open Footprint for folders and ports."
+        : picture === "project"
+          ? `Components in ${projectLabel} — click the folder again for Reveal / Editor.`
+          : "Containers — click a folder to zoom into that source tree.",
   );
   const fleet = $derived(fleetMemory(report ? { ...report, agents: visibleAgents, memory: report.memory?.filter((row) => visibleAgents.some((agent) => agent.id === row.agent_id)) } : null));
   const colorOf = (id: string) => (graph ? agentColor(graph, id, agentIds) : "var(--accent)");
@@ -338,9 +356,9 @@
   {:else}
 <header class="section-bar">
   <SegmentedControl label="Map picture" bind:value={picture} options={[
-    { value: "context", label: "Computer", title: "Context: this computer, the agents on it, and systems they talk to" },
-    { value: "footprint", label: "Footprint", title: "Containers: folders, tools, ports and hosts across every agent" },
-    { value: "project", label: "Project", title: projectPath ? `Components in ${projectLabel}` : "Select a folder on Footprint to see that source tree", disabled: !projectPath },
+    { value: "context", label: "Computer", title: agentPicture && selectedInfo ? `${selectedInfo.name} and the systems it talks to` : "Context: this computer, the agents on it, and systems they talk to" },
+    { value: "footprint", label: "Footprint", title: agentPicture && selectedInfo ? `${selectedInfo.name}: folders, tools, ports and hosts` : "Containers: folders, tools, ports and hosts across every agent" },
+    { value: "project", label: "Project", title: projectPath ? (agentPicture && selectedInfo ? `${selectedInfo.name} in ${projectLabel}` : `Components in ${projectLabel}`) : "Select a folder on Footprint to see that source tree", disabled: !projectPath },
   ]} />
   <div class="section-actions">
     <ActionPill toggle icon="sidebar" label={rail ? "Hide cards" : "Show cards"} pressed={rail} title={rail ? "Hide agent cards so the map uses the full width" : "Show agent cards"} onclick={() => (rail = !rail)} />
@@ -437,7 +455,7 @@
             <div class="stats" aria-live="polite">
               <span class="sr-only">{pictureHint}</span>
               <span><b>{stats.agents}</b> {picture === "project" ? noun(stats.agents, "agent in this project", "agents in this project") : noun(stats.agents, "agent")}</span>
-              {#if fleet}<span><b>{humanBytes(fleet.total)}</b> RAM</span>{/if}
+              {#if agentPicture && selectedInfo}<span><b>{humanBytes(selectedInfo.memory_bytes)}</b> RAM</span>{:else if fleet}<span><b>{humanBytes(fleet.total)}</b> RAM</span>{/if}
               {#if picture !== "context"}<span><b>{stats.folders}</b> {noun(stats.folders, "folder")}</span>{/if}
               {#if picture !== "context"}<span class="opt"><b>{stats.ports}</b> ports &amp; services</span>{/if}
               <span class="opt">{plural(stats.hosts, "remote host")}</span>

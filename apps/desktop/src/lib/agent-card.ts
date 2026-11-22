@@ -3,7 +3,7 @@
 // carry env/header names only, never values.
 import { configStatus, isUnpinned } from "./agent-config";
 import { stoppableEntries } from "./agents";
-import type { FootprintNode } from "./machine-map";
+import type { FootprintNode } from "./footprint";
 import type { Agent, PortEntry } from "./types";
 
 export interface CardPort { entryId: string; port: number; label: string; warn: boolean }

@@ -18,9 +18,6 @@ for (const theme of ["light", "dark"] as const) {
 
     await expect(page.getByText("No agents or dev servers running").first()).toBeVisible();
     await clean("Home cards");
-    await page.getByRole("radiogroup", { name: "Home layout" }).getByRole("radio", { name: /^Map/ }).click();
-    await expect(page.getByText("No agents or dev servers running").first()).toBeVisible();
-    await clean("Home map");
 
     await view(/^List/).click();
     await expect(page.getByRole("listbox")).toHaveCount(0);

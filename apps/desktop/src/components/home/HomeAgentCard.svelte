@@ -6,7 +6,7 @@
   import { CONSENT_LABEL } from "../../lib/consent";
   import { ACCESS_LABEL, type AttentionItem } from "../../lib/home";
   import { KIND_LABEL, accessHeadline, monogram } from "../../lib/agents";
-  import { footprint } from "../../lib/machine-map";
+  import { footprint } from "../../lib/footprint";
   import { miniLayout, type CardModel } from "../../lib/agent-card";
   import { cpuReading, upFor } from "../../lib/format";
   import type { Agent } from "../../lib/types";

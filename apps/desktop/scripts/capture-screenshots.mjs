@@ -130,26 +130,10 @@ async function openAgents(page, picture = "Footprint") {
   if (picture === "Computer") await expect(page.getByRole("group", { name: /^This computer,/ })).toBeVisible();
 }
 
-async function openHome(page, layout = "Cards") {
+async function openHome(page) {
   await page.getByRole("radio", { name: /^Home/ }).click();
   const overview = page.getByRole("region", { name: "Overview", exact: true });
-  await overview.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: new RegExp(`^${layout}`) }).click();
   await expect(overview.getByRole("button", { name: /^MCP filesystem/ }).first()).toBeAttached();
-  return overview;
-}
-
-/** Home → 3D, once the first frame has placed its labels. Software WebGL is accepted for captures. */
-async function openHome3d(page) {
-  await page.getByRole("radio", { name: /^Home/ }).click();
-  const overview = page.getByRole("region", { name: "Overview", exact: true });
-  await overview.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: /^3D/ }).click();
-  const parts = overview.getByRole("navigation", { name: "Machine parts", exact: true });
-  const anyway = overview.getByRole("button", { name: "Use 3D anyway", exact: true });
-  await expect(parts.or(anyway)).toBeVisible({ timeout: 15_000 });
-  if (await anyway.isVisible()) await anyway.click();
-  await expect(parts, "3D captures need WebGL 2 in the capture browser").toBeVisible();
-  await expect(overview.getByRole("region", { name: "Live readings: This computer", exact: true })).toContainText("of 7 configured");
-  await expect(overview.locator(".stage3d .lbl").filter({ hasText: "Cursor" }).first()).toBeVisible();
   return overview;
 }
 
@@ -423,7 +407,6 @@ const walkthrough = [
   { name: "home-summary", async prepare(page) {
     await securityTab(page, /^Findings/);
     await page.getByRole("radio", { name: /^Home/ }).click();
-    await page.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: /^Cards/ }).click();
     await expect(page.getByText(/skill findings/i).first()).toBeVisible();
   } },
   { name: "agent-summary", async prepare(page) {
@@ -569,19 +552,6 @@ const captures = [
     const home = { theme, viewport: { width: 1440, height: 820 }, prefs: { "agents.inventory": "1" } };
     return [
       { ...home, name: `desktop-home-cards-${theme}.png`, async prepare(page) { await openHome(page); } },
-      { ...home, name: `desktop-home-map-${theme}.png`, async prepare(page) {
-        const overview = await openHome(page, "Map");
-        await expect(overview.getByRole("table", { name: "Agent lanes", exact: true })).toBeVisible();
-      } },
-      // A taller window gives the 3D stage room; 1.5× keeps the shaded render within the 1 MB budget.
-      { ...home, viewport: { width: 1440, height: 960 }, deviceScaleFactor: 1.5, name: `desktop-home-3d-${theme}.png`, async prepare(page) { await openHome3d(page); } },
-      { ...home, viewport: { width: 1440, height: 960 }, deviceScaleFactor: 1.5, name: `desktop-home-3d-xray-${theme}.png`, async prepare(page) {
-        const overview = await openHome3d(page);
-        await overview.getByRole("radiogroup", { name: "Assembly", exact: true }).getByRole("radio", { name: /Exploded/ }).click();
-        await overview.getByRole("button", { name: /^X-ray/ }).click();
-        await expect(overview.getByRole("button", { name: /^X-ray/ })).toHaveAttribute("aria-pressed", "true");
-        await expect(overview.locator(".stage3d .lbl.k-plate").first()).toBeVisible();
-      } },
       { ...home, name: `desktop-home-port-menu-${theme}.png`, async prepare(page) { await openPortMenu(page); } },
       { ...home, name: `desktop-home-stop-plan-${theme}.png`, async prepare(page) {
         const { menu } = await openPortMenu(page);
@@ -589,10 +559,6 @@ const captures = [
         await expect(page.getByRole("alertdialog").getByRole("button", { name: "Stop :3000", exact: true })).toBeVisible();
       } },
       { ...home, name: `desktop-home-narrow-${theme}.png`, viewport: { width: 390, height: 844 }, async prepare(page) { await openHome(page); } },
-      { ...home, name: `desktop-home-narrow-map-${theme}.png`, viewport: { width: 390, height: 844 }, async prepare(page) {
-        const overview = await openHome(page, "Map");
-        await expect(overview.getByRole("list", { name: /ports$/ }).first()).toBeVisible();
-      } },
     ];
   }),
   { name: "desktop-overview-dark.png", theme: "dark", async prepare(page) { await selectPort(page); } },
@@ -734,9 +700,6 @@ for (const theme of ["dark", "light"]) {
         if (mobile) await page.addStyleTag({ content: ".app.mac .titlebar{padding-left:16px!important}" });
         // Like the live demo the tour records, without the opt-in MCP inventory.
         await page.getByRole("radio", { name: /^Home/ }).click();
-        const cards = page.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: /^Cards/ });
-        await cards.click();
-        await expect(cards).toBeChecked();
         await expect(page.getByRole("article", { name: "Cursor", exact: true })).toBeVisible();
       },
     });

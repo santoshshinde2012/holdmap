@@ -71,8 +71,11 @@
     const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
     const words: string[] = [];
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const el = node.parentElement;
       const text = node.textContent?.replace(/\s+/g, " ").trim();
-      if (text && !(node.parentElement?.closest("[aria-hidden='true']"))) words.push(text);
+      // Skip hidden chips (the memory callout is not on screen while the usage column shows it).
+      if (!text || !el || el.closest("[aria-hidden='true']") || !el.getClientRects().length) continue;
+      words.push(text);
     }
     visible = words.join(" ");
   });
@@ -200,6 +203,8 @@
   .col-badges { min-width: 0; display: flex; justify-content: flex-end; }
   .usage { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
   .mem, .age { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+  /* Usage already shows this size. The chip is the same number again, so keep it only once that column drops. */
+  @container portlist (min-width: 741px) { .col-badges :global(.chip.memory) { display: none; } }
   .age { color: var(--faint); overflow: hidden; }
 
   /* Actions float over the usage/age columns: no reserved width, no layout shift. */
@@ -229,10 +234,16 @@
     .col-badges { transition: opacity var(--dur-1) var(--ease); }
     .row:hover .col-badges, .row.selected .col-badges { opacity: 0; }
   }
+  /* A details pane on a laptop leaves the list about this wide. Keep the process, or the
+     middle of every row is empty. The branch is the first thing to drop. */
   @container portlist (max-width: 600px) {
+    .row { grid-template-columns: 8px 44px minmax(0, 1.15fr) minmax(72px, 0.9fr) 92px; }
+    .branch, .fw { display: none; }
+    .col-badges :global(.chip:not(:first-child)) { display: none; }
+  }
+  @container portlist (max-width: 440px) {
     .row { grid-template-columns: 8px 44px minmax(0, 1fr) auto; }
     .meta { display: none; }
-    .col-badges :global(.chip:not(:first-child)) { display: none; }
   }
   @container portlist (max-width: 420px) { .row { grid-template-columns: 8px 44px minmax(0, 1fr); } .col-badges, .fw { display: none; } }
   @media (prefers-reduced-motion: reduce) { .row.selected::before { animation: none; } }

@@ -66,15 +66,14 @@ test("Home summary tiles are named by their visible text, so voice control can s
   }
 });
 
-test("the timeline names each lane with a row header", async ({ app }) => {
+test("each Home card names its agent", async ({ app }) => {
   await app.getByRole("radiogroup", { name: "View", exact: true }).getByRole("radio", { name: "Home", exact: true }).click();
-  await app.getByRole("radiogroup", { name: "Home layout", exact: true }).getByRole("radio", { name: "Map", exact: true }).click();
-  const lanes = app.getByRole("table", { name: "Agent lanes", exact: true });
-  // The first row holds the column headers; every agent lane after it is named by a row header.
-  const laneRows = lanes.locator(".row.lane");
-  await expect(laneRows.first()).toBeVisible();
-  for (const row of await laneRows.all()) await expect(row.getByRole("rowheader")).toHaveCount(1);
-  await expect(lanes.getByRole("columnheader", { name: "Agent", exact: true })).toBeVisible();
+  const cards = app.locator("section[aria-label='Agents'] article.card");
+  await expect(cards.first()).toBeVisible();
+  for (const card of await cards.all()) {
+    const name = await card.getAttribute("aria-label");
+    expect(name && name.length > 0).toBe(true);
+  }
 });
 
 test("an overflowing dialog body is reachable by keyboard", async ({ app }) => {
