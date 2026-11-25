@@ -1,5 +1,8 @@
 # Derived from cargo-dist 0.33.0; maintained explicitly for tag validation and least privilege.
 # See dist-workspace.toml and CONTRIBUTING.md before upgrading the generated template.
+# dist has no artifact-retention setting. Pull-request plan artifacts expire after one day;
+# tag and publish artifacts expire after seven days because the GitHub Release keeps the files.
+# Plan and build jobs are time-bounded so a stuck runner cannot use the six-hour default.
 #
 # Copyright 2022-2024, axodotdev
 # SPDX-License-Identifier: MIT or Apache-2.0
@@ -17,6 +20,11 @@
 name: Release
 permissions:
   "contents": "read"
+
+# Superseded pull-request plan runs are cancelled. Tag builds and recovery dispatches are not.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Only vX.Y.Z and optional prerelease suffixes are accepted by release-plan.sh.
 # All packages are released in lockstep, matching desktop-release.yml.
@@ -49,6 +57,7 @@ jobs:
   plan:
     if: github.event_name != 'workflow_dispatch'
     runs-on: "ubuntu-22.04"
+    timeout-minutes: 15
     outputs:
       val: ${{ steps.plan.outputs.manifest }}
       tag: ${{ !github.event.pull_request && github.ref_name || '' }}
@@ -70,6 +79,7 @@ jobs:
         with:
           name: cargo-dist-cache
           path: ~/.cargo/bin/dist
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 7 }}
       # sure would be cool if github gave us proper conditionals...
       # so here's a doubly-nested ternary-via-truthiness to try to provide the best possible
       # functionality based on whether this is a pull_request, and whether it's from a fork.
@@ -86,6 +96,7 @@ jobs:
         with:
           name: artifacts-plan-dist-manifest
           path: plan-dist-manifest.json
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 7 }}
 
   # Build and packages all the platform-specific things
   build-local-artifacts:
@@ -108,6 +119,7 @@ jobs:
       # - N "local" tasks that build each platform's binaries and platform-specific installers
       matrix: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     container: ${{ matrix.container && matrix.container.image || null }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -178,6 +190,7 @@ jobs:
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 7 }}
 
   # Build and package all the platform-agnostic(ish) things
   build-global-artifacts:
@@ -185,6 +198,7 @@ jobs:
       - plan
       - build-local-artifacts
     runs-on: "ubuntu-22.04"
+    timeout-minutes: 30
     permissions:
       "attestations": "write"
       "contents": "read"
@@ -257,6 +271,8 @@ jobs:
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ steps.cargo-cyclonedx.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 7 }}
+
   # Determines if we should publish/announce
   host:
     permissions:
@@ -271,6 +287,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_TAG: ${{ needs.plan.outputs.tag }}
     runs-on: "ubuntu-22.04"
+    timeout-minutes: 30
     outputs:
       val: ${{ steps.host.outputs.manifest }}
     steps:
@@ -304,6 +321,7 @@ jobs:
           # Overwrite the previous copy
           name: artifacts-dist-manifest
           path: dist-manifest.json
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 7 }}
       # Stage a private draft while CLI assets and desktop installers are assembled.
       - name: "Download GitHub Artifacts"
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -337,6 +355,7 @@ jobs:
     # "host" however must run to completion, no skipping allowed!
     if: ${{ always() && needs.host.result == 'success' }}
     runs-on: "ubuntu-22.04"
+    timeout-minutes: 10
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:

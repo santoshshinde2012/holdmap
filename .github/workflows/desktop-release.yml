@@ -40,6 +40,7 @@ concurrency:
 jobs:
   plan:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions: {}
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
@@ -82,6 +83,9 @@ jobs:
             target: ""
             args: ""
     runs-on: ${{ matrix.os }}
+    # Bundling is usually well under 20 minutes. 60 leaves room for a slow notarisation
+    # without keeping the 6-hour default.
+    timeout-minutes: 60
     permissions:
       contents: write # upload to the release
       id-token: write # attestations
@@ -276,12 +280,14 @@ jobs:
           name: verified-updater-${{ matrix.name }}
           path: holdmap-desktop-${{ matrix.name }}.updater.json
           if-no-files-found: error
+          retention-days: 7
 
   updater:
     # One publisher prevents concurrent jobs from dropping each other's latest.json entries.
     needs: [plan, build]
     if: needs.plan.outputs.tag != '' && needs.plan.outputs.updater == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
     env:
@@ -309,6 +315,7 @@ jobs:
     needs: [plan, build]
     if: needs.plan.outputs.tag != ''
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
     env:

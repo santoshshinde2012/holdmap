@@ -140,18 +140,23 @@ search, navigation and port details using deterministic demo data. The CLI integ
 launch the actual MCP server, negotiate every supported protocol version and verify discovery,
 read tools and malformed stop rejection against isolated local listeners.
 
-CI runs Rust and native desktop tests/builds on Linux, macOS and Windows. Chromium browser
-tests run on Linux and gate native builds. Dependency checks include both npm lockfiles and
-the full Cargo workspace, and fail on known advisories at every severity. Gitleaks checks the
-full fetched Git history and current source with redacted findings. CodeQL checks Rust,
-JavaScript/TypeScript, Swift, Python and GitHub Actions. Swift analysis compiles the production
-native capture adapter on macOS without running it. A daily workflow checks newly published
+CI runs Rust tests on Linux, macOS and Windows. Native desktop builds run on Linux for every
+pull request, and on macOS and Windows for pushes to `main`, manual runs, and pull requests
+labeled `ci-full` (adding that label re-runs CI). Release tags build the desktop installers in
+the release workflow. Chromium browser tests run on Linux and gate native builds. Dependency
+checks include both npm lockfiles and the full Cargo workspace, and fail on known advisories at
+every severity. Gitleaks checks the full fetched Git history and current source with redacted
+findings. CodeQL checks Rust, JavaScript/TypeScript, Python and GitHub Actions on pull requests
+and on `main`. Swift analysis compiles the production native capture adapter on macOS without
+running it, on pushes to `main` and the weekly schedule. Docs-only pull requests still run CI,
+because the tests check the CLI reference and Markdown links. A daily workflow checks newly published
 dependency advisories; Dependabot maintains desktop, website, Rust and workflow updates as one
 weekly grouped pull request (`all-dependencies` in `.github/dependabot.yml`).
 Repository administrators should enable Dependabot alerts and security updates in GitHub's
 security settings; those settings are separate from the committed update configuration.
 
-The macOS native job also runs the unchanged updater adapter with a genuine Tauri runtime.
+When the macOS desktop job runs, it also exercises the unchanged updater adapter with a genuine
+Tauri runtime.
 It generates an ephemeral signing key, serves a loopback fixture and installs into a private
 scratch app before verifying the actual relaunch. Wrong keys, tampered bytes, mismatched
 authenticated versions and escaping result paths must leave the original app untouched.
@@ -366,9 +371,11 @@ valid releases and reject shell payloads in legal Git refs, without creating a r
 `release.yml` is derived from cargo-dist 0.33.0 and maintained explicitly: it validates
 `vX.Y.Z` tags, passes tags as quoted environment values and grants repository writes only to
 publishing jobs. `allow-dirty = ["ci"]` preserves this workflow while dist still checks its other
-generated metadata. When upgrading dist or changing its config, review the new upstream CI
-template against these controls and update the workflow deliberately; `dist generate` does
-not regenerate CI with this setting. Keep action pins in the config and workflow in sync.
+generated metadata. The maintained copy also expires pull-request plan artifacts after one day
+and tag artifacts after seven days (the GitHub Release keeps the shipped files), and it sets
+timeouts on the plan and build jobs. When upgrading dist or changing its config, review the new
+upstream CI template against these controls and update the workflow deliberately; `dist generate`
+does not regenerate CI with this setting. Keep action pins in the config and workflow in sync.
 
 **Repository setup** (once; signing and registry integrations are optional):
 

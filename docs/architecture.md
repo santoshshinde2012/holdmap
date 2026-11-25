@@ -1641,9 +1641,11 @@ The CLI integration suite starts the built `holdmap mcp` binary as an actual std
 It checks discovery, rendered prompts, typed read results, version compatibility and rejected
 stop controls with isolated state and local listeners. Desktop browser tests exercise the
 production UI using deterministic demo data; native cache and core ownership/protection
-regressions use fixtures. CI runs the Rust and native tests on Linux, macOS and Windows, and
-the browser suite on Linux. `scripts/check-all.sh` reproduces the full checks on a developer's
-host with its native desktop dependencies installed.
+regressions use fixtures. CI runs the Rust tests on Linux, macOS and Windows. Native desktop
+builds run on Linux for every pull request, and on macOS and Windows for `main`, manual runs
+and pull requests labeled `ci-full`. The browser suite runs on Linux.
+`scripts/check-all.sh` reproduces the full checks on a developer's host with its native desktop
+dependencies installed.
 
 Use Rust 1.95+ and Node.js 22.23.4+ or 24.15+ (`nvm use`), with the native dependencies listed in
 [CONTRIBUTING.md](../CONTRIBUTING.md). `cargo test --locked` checks core, CLI/TUI, MCP and activity
@@ -1658,8 +1660,9 @@ Security regressions cover changed confirmation owners, PID reuse, newly protect
 preview expiry/replay/options, bulk previews, linked files, credential forms, terminal controls
 and bounded MCP input. Gitleaks scans full Git history and current source, including new source
 files while excluding ignored build caches. CI uses immutable action SHAs and least-privilege
-tokens; CodeQL covers JavaScript/TypeScript, Rust, Swift, Python and Actions. Swift analysis
-compiles the native capture adapter on macOS without opening a picker. Dependabot vulnerability
-alerts/security updates are enabled, and a daily dependency workflow checks new advisories
-without waiting for a source change. These gates supplement review and the platform limits in
+tokens; CodeQL covers JavaScript/TypeScript, Rust, Python and Actions on pull requests and on
+`main`. Swift analysis compiles the native capture adapter on macOS without opening a picker,
+on pushes to `main` and the weekly schedule. Dependabot vulnerability alerts and security
+updates are enabled, and a daily dependency workflow checks new advisories without waiting for
+a source change. These gates supplement review and the platform limits in
 [SECURITY.md](../SECURITY.md).

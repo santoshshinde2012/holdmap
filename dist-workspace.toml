@@ -9,6 +9,8 @@ members = ["cargo:."]
 cargo-dist-version = "0.33.0"
 # release.yml is maintained explicitly to validate tags and restrict publishing permissions.
 # Keep dist's metadata checks, but do not regenerate or require a byte-identical CI template.
+# dist 0.33 has no artifact-retention key. The maintained workflow expires pull-request plan
+# artifacts after one day and tag artifacts after seven days, and it sets build-job timeouts.
 allow-dirty = ["ci"]
 # CI backends to support
 ci = "github"
