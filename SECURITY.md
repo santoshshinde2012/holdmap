@@ -199,11 +199,14 @@ advisories are enforced even before they are added to RustSec.
 
 ## Verification and limits
 
-[CI](.github/workflows/ci.yml) runs Rust/native regressions on macOS, Linux and Windows,
-desktop browser tests, cargo-deny, workflow validation and `npm audit` at all severities for
-both npm lockfiles. [Secret scanning](scripts/check-secrets.sh) checks full Git history and
+[CI](.github/workflows/ci.yml) runs Rust regressions on macOS, Linux and Windows, Linux desktop
+builds on every pull request, and macOS and Windows desktop builds on `main`, manual runs and
+pull requests labeled `ci-full`. It also runs desktop browser tests, cargo-deny, workflow
+validation and `npm audit` at all severities for both npm lockfiles.
+[Secret scanning](scripts/check-secrets.sh) checks full Git history and
 current source with Gitleaks. [CodeQL](.github/workflows/codeql.yml) covers JavaScript/TypeScript,
-Rust, Swift, Python and GitHub Actions. A [daily dependency workflow](.github/workflows/security.yml)
+Rust, Python and GitHub Actions on pull requests and on `main`. Swift analysis of the native
+capture adapter runs on pushes to `main` and the weekly schedule. A [daily dependency workflow](.github/workflows/security.yml)
 rechecks advisories without waiting for a code change. Dependabot vulnerability alerts and
 automated security updates are enabled. [Architecture notes](docs/architecture.md)
 describe the boundaries and fixtures behind these checks.

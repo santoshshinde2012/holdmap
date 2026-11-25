@@ -1087,5 +1087,47 @@ else:
                 self.assertEqual(json.loads(self.state.read_text())["uploads"], [])
 
 
+class WorkflowCostTests(unittest.TestCase):
+    """Lock the CI minute and artifact-retention choices against a quiet dist regenerate."""
+
+    def test_pull_requests_keep_linux_desktop_and_gate_the_other_runners(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        desktop = workflow.split("\n  desktop-linux:\n", 1)[1]
+        for name in ("ubuntu-22.04", "macos-latest", "windows-latest"):
+            self.assertIn(f"name: desktop build ({name})", desktop)
+        self.assertEqual(desktop.count("needs: [frontend, test]"), 3)
+        self.assertEqual(desktop.count("timeout-minutes: 35"), 3)
+        self.assertNotIn("matrix.os", desktop)
+        self.assertIn("github.event_name == 'push'", desktop)
+        self.assertIn("github.event_name == 'workflow_dispatch'", desktop)
+        self.assertIn("contains(github.event.pull_request.labels.*.name, 'ci-full')", desktop)
+        self.assertIn("runs-on: ubuntu-22.04", desktop)
+        self.assertIn("types: [opened, synchronize, reopened, labeled]", workflow)
+        self.assertNotIn("timeout-minutes: 60", workflow)
+
+    def test_codeql_swift_runs_on_main_and_the_schedule_only(self):
+        workflow = (ROOT / ".github/workflows/codeql.yml").read_text()
+        languages, swift = workflow.split("\n  analyze-swift:\n", 1)
+        self.assertNotIn("github.event_name != 'pull_request'", languages)
+        self.assertIn("github.event_name != 'pull_request'", swift)
+        self.assertIn('cron: "17 3 * * 1"', workflow)
+        self.assertIn('"*.md"', workflow)
+        self.assertIn('"docs/**"', workflow)
+
+    def test_release_artifacts_expire_and_build_jobs_time_out(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        uploads = len(re.findall(r"uses: actions/upload-artifact@", workflow))
+        retained = workflow.count(
+            "retention-days: ${{ github.event_name == 'pull_request' && 1 || 7 }}")
+        self.assertEqual(uploads, retained)
+        self.assertGreaterEqual(retained, 5)
+        self.assertIn("\n    timeout-minutes: 15\n", workflow)
+        self.assertIn("\n    timeout-minutes: 45\n", workflow)
+        self.assertIn("\n    timeout-minutes: 30\n", workflow)
+        desktop = (ROOT / ".github/workflows/desktop-release.yml").read_text()
+        self.assertIn("timeout-minutes: 60", desktop)
+        self.assertIn("retention-days: 7", desktop)
+
+
 if __name__ == "__main__":
     unittest.main()

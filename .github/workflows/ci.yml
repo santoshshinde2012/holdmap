@@ -1,9 +1,16 @@
 name: CI
 
+# Pull requests build the desktop app on Linux. macOS and Windows desktop builds run for
+# pushes to main, workflow_dispatch, and pull requests labeled ci-full (including when that
+# label is added later). Release tags build the installers in desktop-release.yml, so this
+# workflow does not repeat those builds. Desktop builds wait for the frontend and test jobs.
+# Each OS is its own job: jobs.*.if cannot read matrix, and a skipped job still reports success.
 on:
   push:
     branches: [main]
   pull_request:
+    # labeled re-runs CI only for ci-full; other labels are ignored by the job conditions.
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
 # Least privilege: jobs only read the repository.
@@ -22,6 +29,8 @@ env:
 jobs:
   msrv:
     name: minimum Rust version (1.95)
+    # An unrelated label must not restart CI. ci-full does, so the desktop matrix can widen.
+    if: github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ci-full'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -57,6 +66,7 @@ jobs:
 
   lint:
     name: fmt + clippy + docs
+    if: github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ci-full'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -97,6 +107,7 @@ jobs:
 
   test:
     name: test (${{ matrix.os }})
+    if: github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ci-full'
     strategy:
       fail-fast: false
       matrix:
@@ -138,6 +149,7 @@ jobs:
 
   supply-chain:
     name: supply chain (cargo-deny, npm audit, actionlint)
+    if: github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ci-full'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -185,6 +197,7 @@ jobs:
 
   secrets:
     name: source and history secret scan
+    if: github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ci-full'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -207,6 +220,7 @@ jobs:
 
   frontend:
     name: desktop frontend
+    if: github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ci-full'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
@@ -251,16 +265,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  desktop:
-    name: desktop build (${{ matrix.os }})
-    needs: frontend
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-22.04, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    steps:
+  desktop-linux:
+    name: desktop build (ubuntu-22.04)
+    # No status function in the if, so a failed or skipped test still skips the build.
+    needs: [frontend, test]
+    if: github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ci-full'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps: &desktop_steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -342,3 +354,25 @@ jobs:
           path: ${{ runner.temp }}/snapshot-debug/
           if-no-files-found: ignore
           retention-days: 7
+
+  desktop-macos:
+    name: desktop build (macos-latest)
+    needs: [frontend, test]
+    if: &hosted_desktop_if >-
+      (github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ci-full')
+      && (
+        github.event_name == 'push'
+        || github.event_name == 'workflow_dispatch'
+        || contains(github.event.pull_request.labels.*.name, 'ci-full')
+      )
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps: *desktop_steps
+
+  desktop-windows:
+    name: desktop build (windows-latest)
+    needs: [frontend, test]
+    if: *hosted_desktop_if
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps: *desktop_steps

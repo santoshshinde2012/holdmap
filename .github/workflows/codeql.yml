@@ -7,6 +7,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # Docs-only pull requests still run CI (it checks the CLI reference and Markdown links).
+    # CodeQL has nothing new to compile in those diffs. A skipped workflow leaves its checks
+    # pending, which matters only if branch protection starts requiring these check names.
+    paths-ignore:
+      - "*.md"
+      - "**/*.md"
+      - "docs/**"
   schedule:
     - cron: "17 3 * * 1"
 
@@ -44,6 +51,9 @@ jobs:
 
   analyze-swift:
     name: analyze (swift)
+    # The adapter is one Swift file. Main pushes and the Monday schedule still compile it.
+    # Pull requests keep the Linux language jobs above. A skipped job stays in the check list.
+    if: github.event_name != 'pull_request'
     runs-on: macos-latest
     timeout-minutes: 25
     permissions:
